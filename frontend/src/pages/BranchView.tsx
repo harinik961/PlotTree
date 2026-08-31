@@ -12,6 +12,12 @@ interface Sentence {
 interface PresenceUser {
   user_id: string
 }
+interface StorySegment {
+  branch_id: string
+  branch_title: string
+  sentences: Sentence[]
+}
+
 
 export default function BranchView() {
   const { branchId } = useParams()
@@ -22,15 +28,19 @@ export default function BranchView() {
   const [connected, setConnected] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const [segments, setSegments] = useState<StorySegment[]>([])
+
 
   // get current user id from token
   const token = localStorage.getItem('token')
   const userId = token ? JSON.parse(atob(token.split('.')[1])).sub : null
 
   useEffect(() => {
-    // load existing sentences
-    client.get(`/sentences/${branchId}/sentences`).then(res => {
-      setSentences(res.data)
+    // load full story (ancestor branches + this branch, in order)
+    client.get(`/sentences/${branchId}/full-story`).then(res => {
+      setSegments(res.data)
+      const allSentences = res.data.flatMap((seg: StorySegment) => seg.sentences)
+      setSentences(allSentences)
     })
 
     // connect to websocket
@@ -50,12 +60,24 @@ export default function BranchView() {
       const data = JSON.parse(event.data)
 
       if (data.type === 'new_sentence') {
-        setSentences(prev => [...prev, {
+        const newSentence = {
           id: data.id,
           content: data.content,
           author_id: data.author_id,
           created_at: new Date().toISOString()
-        }])
+        }
+        setSentences(prev => [...prev, newSentence])
+        setSegments(prev => {
+          if (prev.length === 0) {
+            return [{ branch_id: branchId!, branch_title: '', sentences: [newSentence] }]
+          }
+          const updated = [...prev]
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            sentences: [...updated[updated.length - 1].sentences, newSentence]
+          }
+          return updated
+        })
       }
 
       if (data.type === 'presence_update') {
@@ -129,30 +151,37 @@ export default function BranchView() {
 
       {/* sentences */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {sentences.length === 0 && (
+        {segments.length === 0 && (
           <p className="text-gray-400 text-center mt-20">
             no sentences yet — be the first to write
           </p>
         )}
-        {sentences.map(sentence => (
-          <div
-            key={sentence.id}
-            className={`flex ${sentence.author_id === userId ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-lg p-3 rounded-lg ${
-                sentence.author_id === userId
-                  ? 'bg-black text-white'
-                  : 'bg-gray-100 text-gray-900'
-              }`}
-            >
-              <p className="text-sm leading-relaxed">{sentence.content}</p>
-              <p className={`text-xs mt-1 ${
-                sentence.author_id === userId ? 'text-gray-400' : 'text-gray-400'
-              }`}>
-                {sentence.author_id === userId ? 'you' : sentence.author_id.slice(0, 8)}
-              </p>
-            </div>
+        {segments.map((segment, i) => (
+          <div key={segment.branch_id}>
+            {i > 0 && (
+              <div className="text-center text-xs text-gray-400 my-4">
+                ↳ forked into "{segment.branch_title}"
+              </div>
+            )}
+            {segment.sentences.map(sentence => (
+              <div
+                key={sentence.id}
+                className={`flex ${sentence.author_id === userId ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-lg p-3 rounded-lg ${
+                    sentence.author_id === userId
+                      ? 'bg-black text-white'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}
+                >
+                  <p className="text-sm leading-relaxed">{sentence.content}</p>
+                  <p className="text-xs mt-1 text-gray-400">
+                    {sentence.author_id === userId ? 'you' : sentence.author_id.slice(0, 8)}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         ))}
         <div ref={bottomRef} />

@@ -40,6 +40,10 @@ class Branch(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     story_id = Column(UUID(as_uuid = True), ForeignKey("stories.id"), nullable=False)
     parent_branch = Column(UUID(as_uuid = True), ForeignKey("branches.id"), nullable=True) #need to fix 
+
+
+    # fork_sentence_id is the last sentence in the parent branch that existed at the moment this branch was created. Everything after it in the parent is irrelevant to this branch's history.
+    fork_sentence_id = Column(UUID(as_uuid=True), ForeignKey("sentences.id"), nullable=True)
     title = Column(String, nullable=False)
     winner = Column(Boolean, nullable=True)
     voting_ends_at = Column(DateTime, nullable=True)

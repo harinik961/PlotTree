@@ -44,3 +44,6 @@ def get_sentences(
         db=db,
         branch_id=branch_id,
     )
+@router.get("/sentences/{branch_id}/full-story")
+def full_story(branch_id: UUID, db: db_dependency):
+    return story_service.get_full_story(db, branch_id)
